@@ -321,7 +321,7 @@
       // --- FAR WEST & TUAS ---
       { name: "Tuas South Port", lat: 1.2721, lng: 103.6267 },
       { name: "Raffles Marina", lat: 1.3248, lng: 103.6443 },
-      { name: "Tuas Checkpoint", lat: 1.3496, lng: 103.6368 },
+      { name: "Tuas Checkpoint", lat: 1.3437, lng: 103.6416 },
       { name: "Joo Koon", lat: 1.3277, lng: 103.6784 },
       { name: "Jurong Island", lat: 1.2678, lng: 103.6990 },
       { name: "Boon Lay", lat: 1.3404, lng: 103.7060 },
@@ -469,7 +469,7 @@
       const key = routeCacheKey(startLat, startLng, endLat, endLng);
       if (routeCache.has(key)) return routeCache.get(key);
 
-      const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+      const url = `https://router.project-osrm.org/route/v1/foot/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
       let result;
       try {
         const response = await fetch(url);
