@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Singapore Emergency Bot Dispatch</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --panel-bg: #1e293b;
+      --border-color: #334155;
+      --accent-cyan: #06b6d4;
+      --accent-red: #ef4444;
+      --accent-green: #22c55e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--panel-bg);
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map {
+      flex: 1;
+      height: 100%;
+      background: #0f172a;
+    }
+
+    .sidebar {
+      width: 360px;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 15px;
+      z-index: 1000;
+      box-shadow: -5px 0 20px rgba(0, 0, 0, 0.3);
+      overflow-y: auto;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .card h2 {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .btn-emergency {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-emergency:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.7);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 9px;
+      margin-top: 8px;
+      background: transparent;
+      color: var(--accent-cyan);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(6, 182, 212, 0.1);
+    }
+
+    .speed-controls {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .btn-speed {
+      padding: 8px 4px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-speed:hover {
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    .btn-speed.active {
+      background: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+      color: #0f172a;
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+    }
+
+    .status-box {
+      font-family: monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--text-main);
+    }
+
+    .status-highlight {
+      color: var(--accent-cyan);
+      font-weight: bold;
+    }
+
+    .fleet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .fleet-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+
+    .status-tag {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: bold;
+    }
+
+    .status-patrol {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+    }
+
+    .status-responding {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--accent-red);
+    }
+
+    .status-arrived {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-green);
+    }
+
+    .bot-icon {
+      background: var(--accent-cyan);
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-cyan);
+      color: black;
+      font-weight: bold;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.3s;
+    }
+
+    .bot-icon-responding {
+      background: var(--accent-red) !important;
+      box-shadow: 0 0 15px var(--accent-red) !important;
+      color: white !important;
+    }
+
+    .user-icon {
+      background: var(--accent-red);
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 15px var(--accent-red);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+
+      70% {
+        box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 40%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>🇸🇬 Singapore Emergency Bot Network</h1>
+  </header>
+
+  <div class="container">
+    <!-- Interactive Leaflet Map -->
+    <div id="map"></div>
+
+    <!-- Control Sidebar -->
+    <div class="sidebar">
+      <div class="card">
+        <button id="btnTrouble" class="btn-emergency">I'm In Trouble!</button>
+        <button id="btnReset" class="btn-secondary">Reset & Resume Patrols</button>
+      </div>
+
+      <div class="card">
+        <h2>Dispatch Status</h2>
+        <div id="statusBox" class="status-box">
+          Click anywhere on the Singapore map to position yourself, then press <strong>"I'm in trouble!"</strong>.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Simulation Speed</h2>
+        <div id="speedControls" class="speed-controls">
+          <button class="btn-speed" data-speed="25">1x</button>
+          <button class="btn-speed" data-speed="50">5x</button>
+          <button class="btn-speed" data-speed="100">10x</button>
+          <button class="btn-speed" data-speed="500">50x</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Patrolling Fleet</h2>
+        <ul id="fleetList" class="fleet-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    const LANDMARKS = [
+      // --- FAR WEST & TUAS ---
+      { name: "Tuas South Port", lat: 1.2721, lng: 103.6267 },
+      { name: "Raffles Marina", lat: 1.3248, lng: 103.6443 },
+      { name: "Tuas Checkpoint", lat: 1.3496, lng: 103.6368 },
+      { name: "Joo Koon", lat: 1.3277, lng: 103.6784 },
+      { name: "Jurong Island", lat: 1.2678, lng: 103.6990 },
+      { name: "Boon Lay", lat: 1.3404, lng: 103.7060 },
+
+      // --- NORTH-WEST & LIM CHU KANG ---
+      { name: "Lim Chu Kang Jetty", lat: 1.4468, lng: 103.7077 },
+      { name: "Sungei Buloh Wetland Reserve", lat: 1.4461, lng: 103.7302 },
+      { name: "Tengah", lat: 1.3571, lng: 103.7330 },
+      { name: "Kranji Reservoir Park", lat: 1.4312, lng: 103.7432 },
+      { name: "Choa Chu Kang", lat: 1.3840, lng: 103.7470 },
+      { name: "Bukit Panjang", lat: 1.3774, lng: 103.7719 },
+
+      // --- NORTH & SEMBAWANG ---
+      { name: "Woodlands Checkpoint", lat: 1.4482, lng: 103.7690 },
+      { name: "Woodlands Central", lat: 1.4382, lng: 103.7890 },
+      { name: "Mandai (Singapore Zoo)", lat: 1.4043, lng: 103.7930 },
+      { name: "Yishun Central", lat: 1.4294, lng: 103.8350 },
+      { name: "Sembawang Park & Jetty", lat: 1.4632, lng: 103.8378 },
+
+      // --- NORTH-EAST & SELETAR ---
+      { name: "Seletar Aerospace Park", lat: 1.4172, lng: 103.8680 },
+      { name: "Serangoon", lat: 1.3554, lng: 103.8679 },
+      { name: "Hougang", lat: 1.3713, lng: 103.8865 },
+      { name: "Sengkang Central", lat: 1.3868, lng: 103.8914 },
+      { name: "Punggol Point Jetty", lat: 1.4190, lng: 103.9068 },
+      { name: "Coney Island Park", lat: 1.4111, lng: 103.9205 },
+
+      // --- CENTRAL & NATURE RESERVES ---
+      { name: "Bukit Timah Summit", lat: 1.3547, lng: 103.7764 },
+      { name: "MacRitchie Reservoir", lat: 1.3462, lng: 103.8267 },
+      { name: "Orchard Road", lat: 1.3048, lng: 103.8318 },
+      { name: "Novena", lat: 1.3204, lng: 103.8438 },
+      { name: "Ang Mo Kio Central", lat: 1.3691, lng: 103.8454 },
+      { name: "Bishan-Ang Mo Kio Park", lat: 1.3643, lng: 103.8467 },
+      { name: "Toa Payoh", lat: 1.3343, lng: 103.8563 },
+      { name: "Bukit Panjang", lat: 1.3774, lng: 103.7719 },
+      { name: "Kallang Basin / Sports Hub", lat: 1.3035, lng: 103.8750 },
+      { name: "East Coast Parkway", lat: 1.3030, lng: 103.9120 },
+      { name: "Changi Beach Park", lat: 1.3865, lng: 103.9450 },
+      { name: "Pasir Ris Central", lat: 1.3722, lng: 103.9490 },
+      { name: "Central Central", lat:1.3234, lng:103.7920},
+      { name: "Thompson West", lat: 1.3883, lng: 103.8579},
+      { name: "Lower Bukit Timah", lat: 1.3261, lng: 103.8132 },
+
+      // --- WEST & SOUTH-WEST ---
+      { name: "Jurong East Central", lat: 1.3329, lng: 103.7436 },
+      { name: "Clementi", lat: 1.3162, lng: 103.7649 },
+      { name: "West Coast Park", lat: 1.2974, lng: 103.7656 },
+      { name: "Kent Ridge Park", lat: 1.2882, lng: 103.7865 },
+      { name: "Queenstown", lat: 1.2942, lng: 103.8060 },
+      { name: "HarbourFront / Mt Faber", lat: 1.2653, lng: 103.8210 },
+      { name: "Lower Jurong West", lat: 1.3248, lng: 103.7096 },
+
+      // --- DOWNTOWN & SOUTH COAST ---
+      { name: "Chinatown", lat: 1.2839, lng: 103.8436 },
+      { name: "Marina Bay Sands", lat: 1.2834, lng: 103.8607 },
+      { name: "Marina South Pier", lat: 1.2713, lng: 103.8633 },
+      { name: "National Stadium / Kallang", lat: 1.3040, lng: 103.8744 },
+
+      // --- SENTOSA (road-connected) ---
+      { name: "Sentosa Cove", lat: 1.2447, lng: 103.8415 },
+
+      // --- EAST ---
+      { name: "Paya Lebar", lat: 1.3182, lng: 103.8931 },
+      { name: "Geylang Serai", lat: 1.3167, lng: 103.8983 },
+      { name: "Marine Parade", lat: 1.3022, lng: 103.9071 },
+      { name: "Bedok Reservoir", lat: 1.3392, lng: 103.9288 },
+      { name: "East Coast Park (Bedok Jetty)", lat: 1.3056, lng: 103.9317 },
+      { name: "Tampines Central", lat: 1.3526, lng: 103.9447 },
+      { name: "Pasir Ris Park", lat: 1.3789, lng: 103.9515 },
+      { name: "Tampines South", lat: 1.3333, lng: 103.9554 },
+      { name: "Bartley", lat: 1.3426, lng: 103.8850},
+
+      // --- FAR EAST ---
+      { name: "Changi Village", lat: 1.3890, lng: 103.9870 },
+      { name: "Changi Airport", lat: 1.3644, lng: 103.9915 },
+      { name: "Changi Naval Base / East Coast End", lat: 1.3262, lng: 104.0248 }
+    ];
+
+    const PATROL_SPEED_RANGE_KMH = [5, 8];
+    const RESPOND_SPEED_KMH = 10;
+
+    let simSpeedMultiplier = 25;
+    const METERS_PER_DEGREE = 111320;
+
+    const SG_BOUNDS = { minLat: 1.15, maxLat: 1.464, minLng: 103.615, maxLng: 104.06 };
+
+    function isInSingaporeBounds(lat, lng) {
+      return lat >= SG_BOUNDS.minLat && lat <= SG_BOUNDS.maxLat &&
+        lng >= SG_BOUNDS.minLng && lng <= SG_BOUNDS.maxLng;
+    }
+
+    function routeStaysInSingapore(coords) {
+      return coords.every(([lat, lng]) => isInSingaporeBounds(lat, lng));
+    }
+
+    const map = L.map('map', {
+      center: [1.3521, 103.8198],
+      zoom: 12,
+      zoomControl: true
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    let userPos = { lat: 1.290270, lng: 103.851959 };
+    let userMarker = null;
+    let bots = [];
+    let activeRoutePolyline = null;
+    let activeBotId = null;
+
+    const routeCache = new Map();
+
+    function createBotIcon(id, state) {
+      let cls = 'bot-icon';
+      if (state === 'RESPONDING') cls += ' bot-icon-responding';
+      return L.divIcon({
+        className: cls,
+        html: `B${id}`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+    }
+
+    const userIcon = L.divIcon({
+      className: 'user-icon',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+
+    function initUserMarker() {
+      userMarker = L.marker([userPos.lat, userPos.lng], { icon: userIcon }).addTo(map);
+      userMarker.bindPopup("<b>Your Location</b><br>Click anywhere on the map to move yourself.").openPopup();
+    }
+
+    function routeCacheKey(startLat, startLng, endLat, endLng) {
+      const r = n => Math.round(n * 2000) / 2000; // ~50m grid
+      return `${r(startLat)},${r(startLng)}|${r(endLat)},${r(endLng)}`;
+    }
+
+    async function fetchOSRMRoute(startLat, startLng, endLat, endLng) {
+      const key = routeCacheKey(startLat, startLng, endLat, endLng);
+      if (routeCache.has(key)) return routeCache.get(key);
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+      let result;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          result = { coordinates, distance: route.distance, duration: route.duration };
+        }
+      } catch (error) {
+        console.warn("OSRM Route fallback used:", error);
+      }
+
+      if (!result) {
+        result = {
+          coordinates: [[startLat, startLng], [endLat, endLng]],
+          distance: getHaversineDistance(startLat, startLng, endLat, endLng),
+          duration: 60
+        };
+      }
+
+      routeCache.set(key, result);
+      return result;
+    }
+
+    function getHaversineDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    class Bot {
+      constructor(id, startLat, startLng, opts = {}) {
+        this.id = id;
+        this.lat = startLat;
+        this.lng = startLng;
+        this.homeLat = startLat;
+        this.homeLng = startLng;
+        this.patrolRadius = opts.patrolRadius || (350 + Math.random() * 250); // meters
+        this.patrolSpeedKmh = PATROL_SPEED_RANGE_KMH[0] + Math.random() * (PATROL_SPEED_RANGE_KMH[1] - PATROL_SPEED_RANGE_KMH[0]);
+        this.state = 'PATROLLING';
+        this.marker = L.marker([this.lat, this.lng], { icon: createBotIcon(this.id, this.state) }).addTo(map);
+        this.path = [];
+        this.currentPathIdx = 0;
+        this.isFetchingRoute = false;
+
+        this.marker.bindPopup(`<b>Bot #${this.id}</b><br>Status: ${this.state}`);
+      }
+
+      currentSpeedKmh() {
+        return this.state === 'RESPONDING' ? RESPOND_SPEED_KMH : this.patrolSpeedKmh;
+      }
+
+      async update(dtSeconds) {
+        const speedMps = (this.currentSpeedKmh() * 1000 / 3600) * simSpeedMultiplier;
+        const stepDeg = (speedMps * dtSeconds) / METERS_PER_DEGREE;
+
+        if (this.state === 'PATROLLING') {
+          if (this.path.length === 0 && !this.isFetchingRoute) {
+            await this.assignLocalPatrolRoute();
+          }
+          this.stepAlongPath(stepDeg);
+        } else if (this.state === 'RESPONDING') {
+          this.stepAlongPath(stepDeg);
+        }
+      }
+
+      randomPointInZone() {
+        const r = this.patrolRadius * Math.sqrt(Math.random());
+        const theta = Math.random() * 2 * Math.PI;
+        const dLat = (r * Math.cos(theta)) / 111320;
+        const dLng = (r * Math.sin(theta)) / (111320 * Math.cos(this.homeLat * Math.PI / 180));
+        return { lat: this.homeLat + dLat, lng: this.homeLng + dLng };
+      }
+
+      async assignLocalPatrolRoute() {
+        this.isFetchingRoute = true;
+        const target = this.randomPointInZone();
+
+        const routeData = await fetchOSRMRoute(this.lat, this.lng, target.lat, target.lng);
+        const coords = routeStaysInSingapore(routeData.coordinates)
+          ? routeData.coordinates
+          : [[this.lat, this.lng], [target.lat, target.lng]]; // safety net fallback
+
+        this.path = interpolateRoute(coords, 0.0002);
+        this.currentPathIdx = 0;
+        this.isFetchingRoute = false;
+      }
+
+      stepAlongPath(stepSize) {
+        if (!this.path || this.path.length === 0 || this.currentPathIdx >= this.path.length) return;
+
+        const targetPt = this.path[this.currentPathIdx];
+        const dLat = targetPt[0] - this.lat;
+        const dLng = targetPt[1] - this.lng;
+        const dist = Math.hypot(dLat, dLng);
+
+        if (dist < stepSize) {
+          this.lat = targetPt[0];
+          this.lng = targetPt[1];
+          this.currentPathIdx++;
+
+          if (this.currentPathIdx >= this.path.length) {
+            this.path = [];
+            if (this.state === 'RESPONDING') {
+              this.state = 'ARRIVED';
+              updateStatus(`<span style="color: var(--accent-green); font-weight: bold;">✅ Bot #${this.id} HAS ARRIVED AT YOUR LOCATION!</span>`);
+              renderFleetUI();
+            }
+          }
+        } else {
+          this.lat += (dLat / dist) * stepSize;
+          this.lng += (dLng / dist) * stepSize;
+        }
+
+        this.marker.setLatLng([this.lat, this.lng]);
+      }
+
+      setResponding(routeCoordinates) {
+        this.state = 'RESPONDING';
+        this.path = interpolateRoute(routeCoordinates, 0.0002);
+        this.currentPathIdx = 0;
+        this.marker.setIcon(createBotIcon(this.id, this.state));
+      }
+
+      resetToPatrol() {
+        this.state = 'PATROLLING';
+        this.path = [];
+        this.marker.setIcon(createBotIcon(this.id, this.state));
+      }
+    }
+
+    function interpolateRoute(coords, maxSegmentLen) {
+      let interpolated = [];
+      for (let i = 0; i < coords.length - 1; i++) {
+        let p1 = coords[i];
+        let p2 = coords[i + 1];
+        let dist = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+        let steps = Math.max(1, Math.floor(dist / maxSegmentLen));
+
+        for (let s = 0; s < steps; s++) {
+          let t = s / steps;
+          interpolated.push([
+            p1[0] + (p2[0] - p1[0]) * t,
+            p1[1] + (p2[1] - p1[1]) * t
+          ]);
+        }
+      }
+      if (coords.length > 0) interpolated.push(coords[coords.length - 1]);
+      return interpolated;
+    }
+
+    function initBots() {
+      bots = LANDMARKS.map((loc, idx) => new Bot(idx + 1, loc.lat, loc.lng));
+      renderFleetUI();
+    }
+
+    async function dispatchClosestBot() {
+      updateStatus("<i>Computing shortest street routes across Singapore...</i>");
+
+      const results = await Promise.all(bots.map(async bot => {
+        const routeData = await fetchOSRMRoute(bot.lat, bot.lng, userPos.lat, userPos.lng);
+        return { bot, routeData };
+      }));
+
+      let closestBot = null;
+      let shortestDistance = Infinity;
+      let bestRouteData = null;
+
+      for (const { bot, routeData } of results) {
+        if (!routeStaysInSingapore(routeData.coordinates)) continue;
+        if (routeData.distance < shortestDistance) {
+          shortestDistance = routeData.distance;
+          closestBot = bot;
+          bestRouteData = routeData;
+        }
+      }
+
+      if (closestBot && bestRouteData) {
+        bots.forEach(b => b.resetToPatrol());
+
+        activeBotId = closestBot.id;
+        closestBot.setResponding(bestRouteData.coordinates);
+
+        if (activeRoutePolyline) map.removeLayer(activeRoutePolyline);
+        activeRoutePolyline = L.polyline(bestRouteData.coordinates, {
+          color: '#ef4444',
+          weight: 5,
+          opacity: 0.8,
+          dashArray: '8, 8'
+        }).addTo(map);
+
+        map.fitBounds(activeRoutePolyline.getBounds(), { padding: [50, 50] });
+
+        const distKm = (bestRouteData.distance / 1000).toFixed(2);
+        const estMin = Math.max(1, Math.round(bestRouteData.duration / 60));
+
+        updateStatus(
+          `<span style="color: var(--accent-red); font-weight: bold;"> EMERGENCY DISPATCH ACTIVATED!</span><br>` +
+          `Closest Unit: <span class="status-highlight">Bot #${closestBot.id}</span><br>` +
+          `Road Distance: <span class="status-highlight">${distKm} km</span><br>` +
+          `Est. Road Time: ~${estMin} mins`
+        );
+
+        renderFleetUI();
+      } else {
+        updateStatus(`<span style="color: var(--accent-red); font-weight: bold;">⚠️ No reachable unit found for that location.</span>`);
+      }
+    }
+
+    function resetAllPatrols() {
+      if (activeRoutePolyline) map.removeLayer(activeRoutePolyline);
+      activeRoutePolyline = null;
+      activeBotId = null;
+
+      bots.forEach(b => b.resetToPatrol());
+      updateStatus("All emergency dispatches canceled. Bots resumed local patrolling.");
+      renderFleetUI();
+    }
+
+    function updateStatus(html) {
+      document.getElementById('statusBox').innerHTML = html;
+    }
+
+    function renderFleetUI() {
+      const fleetList = document.getElementById('fleetList');
+      fleetList.innerHTML = bots.map(b => {
+        let badgeClass = 'status-patrol';
+        if (b.state === 'RESPONDING') badgeClass = 'status-responding';
+        if (b.state === 'ARRIVED') badgeClass = 'status-arrived';
+
+        return `
+                    <li class="fleet-item">
+                        <span><strong>Bot #${b.id}</strong></span>
+                        <span class="status-tag ${badgeClass}">${b.state}</span>
+                    </li>
+                `;
+      }).join('');
+    }
+
+    map.on('click', (e) => {
+      userPos = { lat: e.latlng.lat, lng: e.latlng.lng };
+      userMarker.setLatLng([userPos.lat, userPos.lng]);
+
+      if (activeBotId !== null) {
+        dispatchClosestBot();
+      } else {
+        updateStatus(`Target updated to Lat: ${userPos.lat.toFixed(4)}, Lng: ${userPos.lng.toFixed(4)}. Click <strong>"I'm in trouble!"</strong> to dispatch.`);
+      }
+    });
+
+    document.getElementById('btnTrouble').addEventListener('click', dispatchClosestBot);
+    document.getElementById('btnReset').addEventListener('click', resetAllPatrols);
+
+    function setSimSpeed(multiplier) {
+      simSpeedMultiplier = multiplier;
+      document.querySelectorAll('.btn-speed').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.speed) === multiplier);
+      });
+    }
+
+    document.querySelectorAll('.btn-speed').forEach(btn => {
+      btn.addEventListener('click', () => setSimSpeed(Number(btn.dataset.speed)));
+    });
+
+    setSimSpeed(simSpeedMultiplier);
+
+    let lastFrameTime = null;
+
+    function animate(timestamp) {
+      if (lastFrameTime === null) lastFrameTime = timestamp;
+      const dtSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.25);
+      lastFrameTime = timestamp;
+
+      bots.forEach(bot => bot.update(dtSeconds));
+      requestAnimationFrame(animate);
+    }
+
+    initUserMarker();
+    initBots();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+
+</html>
